@@ -1,0 +1,152 @@
+
+<script>
+  window.addEventListener('load', function() {
+
+    //flags to prevent multiple adds/removes
+    let giftAdded = false; 
+    let giftRemoved = false; 
+
+    //Local storage key in case client wants to limit promotion
+    const localStorageGiftKey = 'giftAlreadyAdded';
+
+    const conditionalProducts = {{ settings.gwp_product_list | json }};
+    const gift = {{ all_products[settings.gwp_gift_product] | json }};
+
+    //helper function
+    function fetchCart() {
+        return fetch(`${window.location.origin}/cart.js`).then(res => res.json());
+    }
+
+    function addGiftWithPurchase() {
+        fetchCart().then(data => {
+            // Check if there are enough conditional products configured and if the gift is in stock
+            if(conditionalProducts.length < 2 || !gift.available) {
+                return;
+            }
+
+            // Check if all conditionalProducts are in the cart
+            const cartProductIds = data.items.map(item => item.product_id);
+            const allProductsInCart = conditionalProducts.every(product => 
+                cartProductIds.includes(product.id)
+            );
+
+            // Check if the gift is already in the cart
+            const giftInCart = cartProductIds.includes(gift.id);
+
+            if (allProductsInCart && !giftInCart) {
+                fetch(`${window.location.origin}/cart/add.js`, {
+                    method: 'POST',
+                    headers: {
+                    'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                    id: gift.variants[0].id, //assuming gift has only the default variant
+                    quantity: 1
+                    })
+                }).then(response => response.json())
+                .then(data => {
+                    giftAdded = true; 
+                    const giftMessage = document.querySelector('.gwp_span');
+                    if(giftMessage) giftMessage.innerHTML = `Congratulations! You've added the required products to your cart and received a ${gift.title}! Go to <a href="/cart">your cart</a> to see your gift!`;
+                })
+                .catch(error => {
+                    console.error('Error adding gift to cart:', error);
+                });
+            }
+        });
+    };
+
+    function removeGiftWithPurchase(){
+        fetchCart().then(data => {
+
+            // Check if all conditionalProducts are still in the cart
+            const cartProductIds = data.items.map(item => item.product_id);
+            const allProductsInCart = conditionalProducts.every(product => 
+                cartProductIds.includes(product.id)
+            );
+
+            // Check if the gift is in the cart
+            const giftInCart = cartProductIds.includes(gift.id);
+
+            if (!allProductsInCart && giftInCart) {
+                // If not all conditional products are in the cart, remove the gift
+                const giftLineItem = data.items.find(item => item.product_id === gift.id);
+                fetch(`${window.location.origin}/cart/change.js`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        id: giftLineItem.key,
+                        quantity: 0
+                    })
+                })
+                .then(response => response.json())
+                .then(data => {
+                    console.log('Gift removed from cart:', data);
+                    giftRemoved = true;
+                    window.location.reload(); //Currently no AJAX cart drawer so the gift can only be removed on the /cart page
+                })
+                .catch(error => {
+                    console.error('Error removing gift from cart:', error);
+                });
+            }
+
+        });
+    };
+
+    function checkForGiftAtCheckout() {
+        fetchCart().then(data => {
+            const cartProductIds = data.items.map(item => item.product_id);
+            const giftInCart = cartProductIds.includes(gift.id);
+
+            // If the user goes to checkout with the free gift, set a local storage item
+            if (giftInCart && window.location.pathname === '/checkout') {
+                localStorage.setItem(localStorageGiftKey, 'true');
+            }
+        });
+    };
+
+    // Check if the client checked the box to apply a limit to the promotion
+    // and then check if the gift was already added in a previous session
+    const limitAppliedThroughSettings = {{ settings.gwp_limit_one_per_customer }};
+    let giftAlreadyAdded = false;
+    if(limitAppliedThroughSettings){
+        giftAlreadyAdded = localStorage.getItem(localStorageGiftKey);
+    }
+
+    if (!giftAlreadyAdded) {
+        (function (ns, fetch) {
+            ns.fetch = function() {
+            const response = fetch.apply(this, arguments);
+            response.then(res => {
+                if ([
+                    `${window.location.origin}/cart/add`,
+                    `${window.location.origin}/cart/add.js`
+                ].includes(res.url) && res.url !== '') {
+                    if (!giftAdded) { 
+                        addGiftWithPurchase();
+                    }
+                }
+                if ([
+                    `${window.location.origin}/cart/update.js`,
+                    `${window.location.origin}/cart/update`,
+                    `${window.location.origin}/cart/change.js`,
+                    `${window.location.origin}/cart/change`
+                ].includes(res.url) && res.url !== '') {
+                    if (!giftRemoved) { 
+                        removeGiftWithPurchase();
+                    }
+                }
+            });
+            return response
+            }
+        }(window, window.fetch));
+    } else {
+        console.log('Gift already added in previous session. Skipping gift script.');
+    }
+
+    // Check if the user is going to checkout with the gift
+    checkForGiftAtCheckout();
+  });
+</script>

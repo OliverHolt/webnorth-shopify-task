@@ -1,0 +1,143 @@
+{{ 'featured-products.css' | asset_url | stylesheet_tag }}
+<script src="{{ 'product-form.js' | asset_url }}" defer="defer"></script>
+
+{% assign pagination_limit = 2 %}
+{% if section.settings.layout == 'three_columns' %}
+    {% assign pagination_limit = 3 %}
+{% endif %}
+
+<div class="grid {{ section.settings.layout }}">
+    {% paginate section.settings.collection.products by pagination_limit %}
+        {% for product in section.settings.collection.products %}
+            <div class="product-card">
+                {{ product.featured_image | image_url: width: 320 | image_tag  }}
+                <div class="product-info">
+                    <a href="{{ product.url }}" class="product-title">{{ product.title }}</a>
+                    <p class="product-price">{{ product.price | money_without_trailing_zeros }}</p>
+                    <div class="product-description">{{ product.description }}</div>
+                    <div class="product-tags">
+                        {% for tag in product.tags, limit: 2 %}
+                            <p> {{ tag }}</p>
+                        {% endfor %}
+                        <p class="extra-tag">+{{product.tags.size | minus: 2}}</p>
+                    </div>
+                    <product-form>
+                        {% form 'product', product, class: 'form', novalidate: 'novalidate', data-type: 'add-to-cart-form' %}
+                            <input type="hidden" name="id" value="{{ product.selected_or_first_available_variant.id }}" class="product-variant-id">
+                            <button type="submit" class="atc-button">Add to cart</button>
+                            {%- render 'loading-spinner' -%}
+                        {% endform %}
+                    </product-form>
+                </div>
+            </div>
+        {% endfor %}
+        <!-- Pagination Controls -->
+        <div class="pagination">
+            {% if paginate.previous %}
+                <a href="{{ paginate.previous.url }}"> < Previous page</a>
+            {% endif %}
+            {% if paginate.next %}
+                <a href="{{ paginate.next.url }}">Next page > </a>
+            {% endif %}
+        </div>
+    {% endpaginate %}
+</div>
+
+{% if settings.gwp_gift_product and section.settings.show_gwp_message %}
+    <style>
+        .gwp_span{
+            font-family: Source Code Pro;
+            text-align: center;
+            margin-top: 24px;
+        }
+    </style>
+    {% assign first_conditional_product = settings.gwp_product_list | first %}
+    {% assign second_conditional_product = settings.gwp_product_list | last %}
+    {% assign gift_product = settings.gwp_gift_product %}
+    <div class="gwp_span">Add a {{ first_conditional_product.title }} and a {{ second_conditional_product.title }} to your cart to receive a {{ gift_product.title }}!</div>
+{% endif %}
+
+<script>
+    document.addEventListener('DOMContentLoaded', function(){
+        //Script to dim other product cards when hovering over one
+        const productCards = document.querySelectorAll('.featured-products .product-card');
+        productCards.forEach(card => {
+            card.addEventListener('mouseenter', () => {
+                productCards.forEach(otherCard => {
+                    if (otherCard !== card) {
+                        otherCard.classList.add('dimmed');
+                    }
+                });
+            });
+            card.addEventListener('mouseleave', () => {
+                productCards.forEach(otherCard => {
+                    otherCard.classList.remove('dimmed');
+                });
+            });
+
+            // Focus effect for keyboard users
+            card.addEventListener('focusin', () => {
+                productCards.forEach(otherCard => {
+                    if (otherCard !== card) {
+                        otherCard.classList.add('dimmed');
+                    }
+                });
+                card.classList.add('focussed');
+            });
+            card.addEventListener('focusout', () => {
+                productCards.forEach(otherCard => {
+                    otherCard.classList.remove('dimmed');
+                });
+                card.classList.remove('focussed');
+            });
+        });
+
+    });
+</script>
+
+{% schema %}
+    {
+      "name": "Featured Products",
+      "tag": "section",
+      "class": "featured-products",
+      "disabled_on": {
+        "groups": ["header", "footer"]
+      },
+      "settings": [
+        {
+            "type": "collection",
+            "id": "collection",
+            "label": "Collection",
+            "info": "Select a collection to feature in this section"
+        },
+        {
+            "type": "select",
+            "id": "layout",
+            "label": "Column Layout",
+            "info": "On mobile this will always be 1 column",
+            "options": [
+                {
+                "value": "two_columns",
+                "label": "2 columns"
+                },
+                {
+                "value": "three_columns",
+                "label": "3 columns"
+                }
+            ],
+            "default": "three_columns"
+        },
+        {
+            "type": "checkbox",
+            "id": "show_gwp_message",
+            "label": "Show the Gift with Purchase message in this section",
+            "default": true
+        }
+      ],
+      "presets": [
+        {
+          "name": "Featured Products"
+        }
+      ]
+    }
+    {% endschema %}

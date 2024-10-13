@@ -1,0 +1,14 @@
+{
+  "sections": {
+    "featured_products_c8RUgA": {
+      "type": "featured-products",
+      "settings": {
+        "collection": "clothes",
+        "layout": "three_columns"
+      }
+    }
+  },
+  "order": [
+    "featured_products_c8RUgA"
+  ]
+}
